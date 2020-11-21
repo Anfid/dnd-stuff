@@ -1,0 +1,10 @@
+[workspace]
+default-members = ["backend"]
+members = [
+    "backend",
+    "libdnd",
+]
+
+[profile.release.package.libdnd]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"

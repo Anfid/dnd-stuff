@@ -1,0 +1,13 @@
+# Elm
+web/main.js
+elm-stuff
+
+# Rust
+web/libdnd
+target
+**/*.rs.bk
+Cargo.lock
+bin/
+
+# WASM
+wasm-pack.log

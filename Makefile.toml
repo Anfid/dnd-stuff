@@ -1,0 +1,104 @@
+[config]
+skip_core_tasks = true
+
+
+# General
+
+[tasks.default]
+dependencies = ["build-frontend", "build-libdnd", "test-libdnd"]
+workspace = false
+
+[tasks.build]
+dependencies = ["build-frontend", "build-backend", "build-libdnd"]
+workspace = false
+
+[tasks.run]
+dependencies = ["build-frontend", "build-backend", "build-libdnd"]
+run_task = "run-backend"
+workspace = false
+
+[tasks.test]
+dependencies = ["test-libdnd"]
+workspace = false
+
+[tasks.clean]
+dependencies = ["clean-frontend", "clean-rust", "clean-wasm"]
+workspace = false
+
+[tasks.watch]
+run_task = { name = ["watch-frontend", "watch-libdnd"], parallel = true }
+workspace = false
+
+
+# Frontend
+
+[tasks.build-frontend]
+command = "elm"
+args = ["make", "frontend/Main.elm", "--output", "web/main.js"]
+workspace = false
+
+[tasks.clean-frontend]
+command = "rm"
+args = ["-rf", "web/main.js"]
+workspace = false
+
+[tasks.watch-frontend]
+command = "elm"
+args = ["make", "frontend/Main.elm", "--output", "web/main.js"]
+watch = { watch = ["./frontend/"] }
+workspace = false
+
+
+# Backend
+
+[tasks.build-backend]
+command = "cargo"
+args = ["build", "-p", "backend"]
+workspace = false
+
+[tasks.run-backend]
+command = "cargo"
+args = ["run", "-p", "backend"]
+workspace = false
+
+[tasks.test-backend]
+command = "cargo"
+args = ["test", "-p", "backend"]
+workspace = false
+
+# Cleans all rust projects cache
+[tasks.clean-rust]
+command = "cargo"
+args = ["clean"]
+workspace = false
+
+[tasks.watch-backend]
+command = "cargo"
+args = ["run", "-p", "backend"]
+watch = { watch = ["./backend/"] }
+workspace = false
+
+
+# Lib
+
+[tasks.build-libdnd]
+command = "wasm-pack"
+args = ["build", "--target", "web", "libdnd", "--no-typescript", "--out-dir", "../web/libdnd/"]
+workspace = false
+
+[tasks.test-libdnd]
+command = "wasm-pack"
+args = ["test", "libdnd", "--node"]
+workspace = false
+
+# Cleans generated WASM and WASM glue code
+[tasks.clean-wasm]
+command = "rm"
+args = ["-rf", "web/libdnd"]
+workspace = false
+
+[tasks.watch-libdnd]
+command = "wasm-pack"
+args = ["build", "--target", "web", "--no-typescript", "libdnd", "--out-dir", "../web/libdnd/"]
+watch = { watch = ["./libdnd/"] }
+workspace = false

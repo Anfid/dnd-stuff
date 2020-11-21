@@ -1,0 +1,29 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Main</title>
+  <script src="main.js"></script>
+</head>
+
+<body>
+  <div id="dnd-stuff"></div>
+  <script type="module">
+    import init, * as libdnd from './libdnd/libdnd.js';
+
+    var app = Elm.Main.init({
+      node: document.getElementById('dnd-stuff'),
+      flags: { width: window.innerWidth, height: window.innerHeight }
+    })
+
+    async function setup() {
+        await init();
+        app.ports.sendMessage.subscribe(function(message) {
+            let resp = libdnd.message_dispatcher(message)
+            app.ports.messageReceiver.send(resp);
+        })
+    }
+    setup();
+  </script>
+</body>
+</html>
