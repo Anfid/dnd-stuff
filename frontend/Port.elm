@@ -1,6 +1,6 @@
-port module Port exposing (calculateDice, messageReceiver, sendMessage)
+port module Port exposing (CalculateResponse, ParseError(..), Response(..), calculateDice, decodeResp, messageReceiver, sendMessage)
 
-import Json.Decode exposing (Decoder, andThen, at, dict, fail, field, list, map, map2, map3, oneOf, string, succeed)
+import Json.Decode as Decode exposing (Decoder, andThen, at, decodeString, fail, field, int, map, map2, oneOf, string)
 import Json.Encode as Encode
 
 
@@ -15,7 +15,73 @@ port messageReceiver : (String -> msg) -> Sub msg
 
 
 
--- INTERFACE
+-- IN
+
+
+type Response
+    = Calculate (Result ParseError CalculateResponse)
+
+
+type alias CalculateResponse =
+    { result : Int }
+
+
+type ParseError
+    = UnexpectedToken { index : Int, token : String }
+    | BadDie Int
+    | IllegalExpression Int
+    | UnmatchedParen Int
+    | EmptyExpression Int
+
+
+decodeResp : String -> Result Decode.Error Response
+decodeResp =
+    at [ "command" ] string |> andThen commandDecoder |> decodeString
+
+
+commandDecoder : String -> Decoder Response
+commandDecoder command =
+    case command of
+        "calculate_dice" ->
+            map Calculate <|
+                oneOf
+                    [ at [ "error" ] string |> andThen parseErrorDecoder |> map Err
+                    , map Ok calculateDecoder
+                    ]
+
+        _ ->
+            fail "Unknown command"
+
+
+calculateDecoder : Decoder CalculateResponse
+calculateDecoder =
+    map CalculateResponse (field "result" int)
+
+
+parseErrorDecoder : String -> Decoder ParseError
+parseErrorDecoder errkind =
+    case errkind of
+        "unexpected_token" ->
+            map UnexpectedToken <| map2 (\i t -> { index = i, token = t }) (field "index" int) (field "token" string)
+
+        "bad_die" ->
+            map BadDie (field "index" int)
+
+        "illegal_expression" ->
+            map IllegalExpression (field "index" int)
+
+        "unmatched_paren" ->
+            map UnmatchedParen (field "index" int)
+
+        "empty_expression" ->
+            map EmptyExpression (field "index" int)
+
+        _ ->
+            fail "Unexpected error kind"
+
+
+
+-- OUT
 
 
 calculateDice : String -> Cmd msg

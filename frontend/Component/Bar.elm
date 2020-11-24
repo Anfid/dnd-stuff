@@ -14,7 +14,7 @@ init =
 
 
 type Msg
-    = ShowDice
+    = ShowThrowDice
 
 
 type alias Model =
@@ -24,13 +24,13 @@ type alias Model =
 update : Msg -> Session -> Model -> ( Model, PageMsg, Cmd Msg )
 update msg session model =
     case msg of
-        ShowDice ->
-            ( model, PageMsg.ShowDice, Navigation.pushUrl session.key "/dice" )
+        ShowThrowDice ->
+            ( model, PageMsg.ShowThrowDice, Navigation.pushUrl session.key "/dice" )
 
 
 view : Model -> Element Msg
 view _ =
     row [ alignRight, spacing 5, padding 5 ]
         [ button (buttonStyle [])
-            { onPress = Just ShowDice, label = text "Dice stat" }
+            { onPress = Just ShowThrowDice, label = text "Throw dice" }
         ]

@@ -6,7 +6,7 @@ import Browser.Navigation as Navigation
 import Html
 import Page.Index
 import PageMsg exposing (PageMsg)
-import Port exposing (calculateDice, messageReceiver)
+import Port exposing (decodeResp, messageReceiver)
 import Session exposing (Session)
 import Url exposing (Url)
 import Url.Parser as Parser exposing (Parser)
@@ -88,12 +88,17 @@ update msg model =
             Page.Index.update subMsg model.session subModel
                 |> handleUpdate Index IndexMsg model
 
-        ( Recv str, _ ) ->
-            case Debug.log "Received message" str of
-                "Wasm ready" ->
-                    ( model, calculateDice "d20" )
+        ( Recv str, Index subModel ) ->
+            case decodeResp (Debug.log "Received message" str) of
+                Ok response ->
+                    Page.Index.update (Page.Index.responseMsg response) model.session subModel
+                        |> handleUpdate Index IndexMsg model
 
-                _ ->
+                Err e ->
+                    let
+                        _ =
+                            Debug.log "Parse err" e
+                    in
                     ( model, Cmd.none )
 
 

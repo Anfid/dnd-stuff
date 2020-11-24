@@ -1,9 +1,10 @@
 use super::{Expr, Hand, Op, Val};
-
+use serde_derive::Serialize;
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Serialize)]
+#[serde(tag = "error", rename_all = "snake_case")]
 pub enum ParseError {
     UnexpectedToken { index: usize, token: char },
     BadDie { index: usize },
