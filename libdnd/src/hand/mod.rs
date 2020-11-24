@@ -29,6 +29,7 @@ impl FromStr for Hand {
     }
 }
 
+#[derive(Debug, Clone)]
 enum Expr {
     Value(Val),
     Expr {
@@ -43,6 +44,14 @@ impl Expr {
         match self {
             Self::Value(Val::Num(n)) => n as i64,
             Self::Value(Val::Die(d)) => (rand::random::<u32>() % d + 1) as i64,
+            Self::Expr {
+                op: Op::Mul,
+                left,
+                right,
+            } if right.is_die() => {
+                let left = left.throw();
+                (0..left).fold(0, |acc, _| acc + right.clone().throw())
+            }
             Self::Expr { op, left, right } => {
                 let left = left.throw();
                 let right = right.throw();
@@ -52,6 +61,14 @@ impl Expr {
                     Op::Mul => left * right,
                 }
             }
+        }
+    }
+
+    fn is_die(&self) -> bool {
+        if let Self::Value(Val::Die(_)) = self {
+            true
+        } else {
+            false
         }
     }
 }
