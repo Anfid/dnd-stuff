@@ -181,10 +181,10 @@ pub(super) struct Normalized(Vec<Token>);
 
 impl Normalized {
     pub(super) fn to_expr(self) -> Expr {
-        Normalized::parse_recursive(ParsedExpr::None, self.0.as_slice())
+        Normalized::parse_recursive(ParsedExpr::None, self.0.as_slice()).expr
     }
 
-    fn parse_recursive(e: ParsedExpr, tokens: &[Token]) -> Expr {
+    fn parse_recursive(e: ParsedExpr, tokens: &[Token]) -> Parsed {
         let prio = |op: Op| match op {
             Op::Add => 1,
             Op::Sub => 1,
@@ -196,16 +196,28 @@ impl Normalized {
             Token::Mul => Op::Mul,
             _ => unreachable!(),
         };
-        let get_val = |t: Token| match t {
-            Token::Die(n) => Val::Die(n),
-            Token::Num(n) => Val::Num(n),
+        let get_val = |tokens: &[Token]| match tokens[0] {
+            Token::Die(n) => Parsed::new(1, Expr::Value(Val::Die(n))),
+            Token::Num(n) => Parsed::new(1, Expr::Value(Val::Num(n))),
+            Token::OpenParen => {
+                Normalized::parse_recursive(ParsedExpr::None, &tokens[1..]).shift(1)
+            }
             _ => unreachable!(),
         };
         let next_op = |tokens: &[Token]| {
+            let mut depth = 0;
             tokens.iter().find_map(|t| match t {
-                Token::Add => Some(Op::Add),
-                Token::Sub => Some(Op::Sub),
-                Token::Mul => Some(Op::Mul),
+                Token::Add if depth == 0 => Some(Op::Add),
+                Token::Sub if depth == 0 => Some(Op::Sub),
+                Token::Mul if depth == 0 => Some(Op::Mul),
+                Token::OpenParen => {
+                    depth += 1;
+                    None
+                }
+                Token::CloseParen => {
+                    depth -= 1;
+                    None
+                }
                 _ => None,
             })
         };
@@ -213,44 +225,43 @@ impl Normalized {
         match e {
             ParsedExpr::None => {
                 if let Some(token) = tokens.get(0) {
-                    let val = get_val(*token);
-                    Normalized::parse_recursive(ParsedExpr::Expr(Expr::Value(val)), &tokens[1..])
+                    let p = get_val(tokens);
+                    Normalized::parse_recursive(ParsedExpr::Expr(p.expr), &tokens[p.shift..])
+                        .shift(p.shift)
                 } else {
                     unreachable!()
                 }
             }
             ParsedExpr::Expr(e) => {
-                if let Some(token) = tokens.get(0) {
-                    let op = get_op(*token);
-                    Normalized::parse_recursive(ParsedExpr::Half { op, left: e }, &tokens[1..])
+                let token = tokens.get(0);
+                if token == None || token == Some(&Token::CloseParen) {
+                    Parsed::new(1, e)
                 } else {
-                    e
+                    let op = get_op(tokens[0]);
+                    Normalized::parse_recursive(ParsedExpr::Half { op, left: e }, &tokens[1..])
+                        .shift(1)
                 }
             }
             ParsedExpr::Half { op, left } => {
-                if let Some(next_op) = next_op(tokens) {
-                    if prio(op) < prio(next_op) {
-                        let right = Normalized::parse_recursive(ParsedExpr::None, &tokens);
+                if next_op(tokens).map(|next_op| prio(op) < prio(next_op)) == Some(true) {
+                    let p = Normalized::parse_recursive(ParsedExpr::None, &tokens);
+                    Parsed::new(
+                        p.shift,
                         Expr::Expr {
                             op,
                             left: Box::new(left),
-                            right: Box::new(right),
-                        }
-                    } else {
-                        let expr = Expr::Expr {
-                            op,
-                            left: Box::new(left),
-                            right: Box::new(Expr::Value(get_val(tokens[0]))),
-                        };
-                        Normalized::parse_recursive(ParsedExpr::Expr(expr), &tokens[1..])
-                    }
+                            right: Box::new(p.expr),
+                        },
+                    )
                 } else {
+                    let p = get_val(tokens);
                     let expr = Expr::Expr {
                         op,
                         left: Box::new(left),
-                        right: Box::new(Expr::Value(get_val(tokens[0]))),
+                        right: Box::new(p.expr),
                     };
-                    Normalized::parse_recursive(ParsedExpr::Expr(expr), &tokens[1..])
+                    Normalized::parse_recursive(ParsedExpr::Expr(expr), &tokens[p.shift..])
+                        .shift(p.shift)
                 }
             }
         }
@@ -261,6 +272,23 @@ enum ParsedExpr {
     None,
     Expr(Expr),
     Half { op: Op, left: Expr },
+}
+
+struct Parsed {
+    shift: usize,
+    expr: Expr,
+}
+
+impl Parsed {
+    fn new(shift: usize, expr: Expr) -> Self {
+        Parsed { shift, expr }
+    }
+    fn shift(self, s: usize) -> Self {
+        Self {
+            shift: self.shift + s,
+            ..self
+        }
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
