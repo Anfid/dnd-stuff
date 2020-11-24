@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies]
+rand = { version = "0.7.3", features = ["wasm-bindgen"] }
 serde = "1.0.117"
 serde_derive = "1.0.117"
 serde_json = "1.0.59"

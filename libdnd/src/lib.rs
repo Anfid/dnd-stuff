@@ -1,5 +1,10 @@
 use serde_derive::Deserialize;
+use std::str::FromStr;
 use wasm_bindgen::prelude::*;
+
+mod hand;
+
+use hand::Hand;
 
 #[derive(Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
@@ -29,7 +34,7 @@ pub fn message_dispatcher(msg: &str) -> JsValue {
 }
 
 fn calculate_dice(expr: String) -> String {
-    format!("your expr: {:?}", expr)
+    Hand::from_str(expr.as_str()).unwrap().throw().to_string()
 }
 
 fn analyze_dice(_expr: String) -> String {
@@ -38,7 +43,6 @@ fn analyze_dice(_expr: String) -> String {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod test {
-    extern crate wasm_bindgen_test;
     use wasm_bindgen_test::*;
 
     use super::*;
