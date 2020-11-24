@@ -89,7 +89,7 @@ update msg model =
                 |> handleUpdate Index IndexMsg model
 
         ( Recv str, _ ) ->
-            case str of
+            case Debug.log "Received message" str of
                 "Wasm ready" ->
                     ( model, calculateDice "d20" )
 

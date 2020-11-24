@@ -1,8 +1,6 @@
 use serde_derive::Deserialize;
 use wasm_bindgen::prelude::*;
 
-mod utils;
-
 #[derive(Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 enum Message {
@@ -16,24 +14,26 @@ struct Dice {
 }
 
 #[wasm_bindgen]
-extern "C" {
-    fn alert(s: &str);
-}
-
-#[wasm_bindgen]
 pub fn message_dispatcher(msg: &str) -> JsValue {
-    utils::set_panic_hook();
+    console_error_panic_hook::set_once();
 
-    let message = serde_json::from_str(msg).unwrap();
-    match message {
-        Message::CalculateDice(Dice { expression }) => calculate_dice(expression),
-        Message::AnalyzeDice(Dice { expression: _ }) => todo!(),
+    if let Ok(message) = serde_json::from_str(msg) {
+        match message {
+            Message::CalculateDice(Dice { expression }) => calculate_dice(expression),
+            Message::AnalyzeDice(Dice { expression }) => analyze_dice(expression),
+        }
+    } else {
+        String::from("Message parse error")
     }
-    "TODO".into()
+    .into()
 }
 
-fn calculate_dice(expr: String) {
-    alert(format!("your expr: {:?}", expr).as_str())
+fn calculate_dice(expr: String) -> String {
+    format!("your expr: {:?}", expr)
+}
+
+fn analyze_dice(_expr: String) -> String {
+    format!("AnalyzeDice unimplemented")
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

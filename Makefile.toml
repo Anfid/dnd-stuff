@@ -83,7 +83,7 @@ workspace = false
 
 [tasks.build-libdnd]
 command = "wasm-pack"
-args = ["build", "--target", "web", "libdnd", "--no-typescript", "--out-dir", "../web/libdnd/"]
+args = ["build", "--target", "no-modules", "libdnd", "--no-typescript", "--out-dir", "../web/libdnd/"]
 workspace = false
 
 [tasks.test-libdnd]
@@ -99,6 +99,6 @@ workspace = false
 
 [tasks.watch-libdnd]
 command = "wasm-pack"
-args = ["build", "--target", "web", "--no-typescript", "libdnd", "--out-dir", "../web/libdnd/"]
+args = ["build", "--target", "no-modules", "--no-typescript", "libdnd", "--out-dir", "../web/libdnd/"]
 watch = { watch = ["./libdnd/"] }
 workspace = false
