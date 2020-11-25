@@ -1,4 +1,4 @@
-use super::{Expr, Hand, Op, Val};
+use super::{Die, Expr, Hand, Op, Val};
 use serde_derive::Serialize;
 use std::convert::TryFrom;
 use std::str::FromStr;
@@ -23,29 +23,50 @@ struct IndexedToken {
 }
 
 impl IndexedToken {
-    fn new(index: usize, token: Token) -> Self {
-        IndexedToken { index, token }
+    fn begin(index: usize) -> Self {
+        IndexedToken {
+            index,
+            token: Token::Begin,
+        }
+    }
+
+    fn end(index: usize) -> Self {
+        IndexedToken {
+            index,
+            token: Token::End,
+        }
+    }
+
+    fn operation(index: usize, op: Op) -> Self {
+        IndexedToken {
+            index,
+            token: Token::Op(op),
+        }
+    }
+
+    fn value(index: usize, val: Val) -> Self {
+        IndexedToken {
+            index,
+            token: Token::Val(val),
+        }
     }
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 enum Token {
-    Num(u32),
-    Die(u32),
-    Add,
-    Sub,
-    Mul,
-    OpenParen,
-    CloseParen,
+    Begin,
+    End,
+    Op(Op),
+    Val(Val),
 }
 
 impl FromStr for Tokens {
     type Err = ParseError;
 
     fn from_str(expr: &str) -> Result<Self, Self::Err> {
-        use Token::*;
         let mut tokens = Vec::new();
         let mut chars = expr.chars().enumerate().peekable();
+        tokens.push(IndexedToken::begin(0));
         while let Some((idx, c)) = chars.next() {
             let token = match c {
                 // Digits
@@ -56,7 +77,7 @@ impl FromStr for Tokens {
                         let (_, c) = chars.next().unwrap();
                         num = num * 10 + c as u32 - '0' as u32
                     }
-                    IndexedToken::new(idx, Num(num))
+                    IndexedToken::value(idx, Val::Num(num))
                 }
                 // Die
                 'd' => {
@@ -67,18 +88,18 @@ impl FromStr for Tokens {
                         num = num * 10 + c as u32 - '0' as u32
                     }
                     if num > 0 {
-                        IndexedToken::new(idx, Token::Die(num))
+                        IndexedToken::value(idx, Val::Die(Die::new(num)))
                     } else {
                         Err(ParseError::BadDie { index: idx })?
                     }
                 }
                 // Skip whitespace
                 ' ' | '\t' | '\n' => continue,
-                '+' => IndexedToken::new(idx, Add),
-                '-' => IndexedToken::new(idx, Sub),
-                '*' => IndexedToken::new(idx, Mul),
-                '(' | '[' | '{' => IndexedToken::new(idx, Token::OpenParen),
-                ')' | ']' | '}' => IndexedToken::new(idx, Token::CloseParen),
+                '+' => IndexedToken::operation(idx, Op::Add),
+                '-' => IndexedToken::operation(idx, Op::Sub),
+                '*' => IndexedToken::operation(idx, Op::Mul),
+                '(' | '[' | '{' => IndexedToken::begin(idx),
+                ')' | ']' | '}' => IndexedToken::end(idx),
                 token => Err(ParseError::UnexpectedToken {
                     index: idx,
                     token: c,
@@ -86,6 +107,9 @@ impl FromStr for Tokens {
             };
             tokens.push(token);
         }
+        tokens.push(IndexedToken::end(
+            tokens.last().map(|t| t.index).unwrap_or(0),
+        ));
         Ok(Tokens(tokens))
     }
 }
@@ -97,8 +121,8 @@ impl Tokens {
         {
             let parens = self.0.iter().try_fold(Vec::new(), |mut acc, it| {
                 match it.token {
-                    OpenParen => acc.push(it),
-                    CloseParen => {
+                    Begin => acc.push(it),
+                    End => {
                         acc.pop()
                             .ok_or_else(|| ParseError::UnmatchedParen { index: it.index })?;
                     }
@@ -111,157 +135,124 @@ impl Tokens {
             };
         }
 
+        Tokens::normalize_recursive(&self.0).map(|(res, _)| res)
+    }
+
+    fn normalize_recursive(
+        tokens: &[IndexedToken],
+    ) -> Result<(Normalized, &[IndexedToken]), ParseError> {
+        use super::Op::*;
+        use super::Val::*;
+        use Token::*;
+
+        let mut left = tokens[0];
+        let mut tokens = &tokens[1..];
         let mut normalized = Vec::new();
-        let mut tokens = self.0.into_iter();
-        let mut left = tokens
-            .next()
-            .ok_or_else(|| ParseError::EmptyExpression { index: 0 })?;
 
-        // Normalize first token
-        // normalize_pair will not push left token, ok to use as a marker of new expression
-        normalize_pair(&mut normalized, OpenParen, left)?;
-        while let Some(right) = tokens.next() {
-            normalize_pair(&mut normalized, left.token, right)?;
+        loop {
+            // Guranteed to have at least 2 elements: Begin and End
+            let right = tokens[0];
+            match (left.token, right.token) {
+                // Expression start
+                (Begin, Begin) | (Val(_), Begin) | (Op(_), Begin) => {
+                    if let Val(_) = left.token {
+                        normalized.push(NormToken::Op(Mul))
+                    }
+                    let (expr, remaining) = Tokens::normalize_recursive(tokens)?;
+                    normalized.push(NormToken::Expr(expr));
+                    tokens = remaining;
+                    // Treat expression on next iteration as regular value
+                    left = IndexedToken::value(remaining[0].index, Num(0));
+                    continue;
+                }
+                (Begin, End) => Err(ParseError::EmptyExpression { index: left.index })?,
+                (Begin, Val(v)) => normalized.push(NormToken::Val(v)),
+                (Begin, Op(r @ Sub)) | (Begin, Op(r @ Add)) => {
+                    normalized.push(NormToken::Val(Num(0)));
+                    normalized.push(NormToken::Op(r))
+                }
+                (Begin, Op(Mul)) | (Op(_), Op(_)) => {
+                    Err(ParseError::IllegalExpression { index: right.index })?
+                }
+                // Values
+                (Val(_), Val(v)) => {
+                    normalized.push(NormToken::Op(Mul));
+                    normalized.push(NormToken::Val(v));
+                }
+                (Val(_), Op(o)) => normalized.push(NormToken::Op(o)),
+                (Val(_), End) => return Ok((Normalized(normalized), &tokens[1..])),
+                // Operators
+                (Op(_), Val(v)) => normalized.push(NormToken::Val(v)),
+                (Op(_), End) => Err(ParseError::IllegalExpression { index: left.index })?,
+                // left can't be End
+                (End, _) => unreachable!(),
+            }
             left = right;
+            tokens = &tokens[1..];
         }
-        // Normalize last token
-        match left.token {
-            Num(_) | Die(_) | CloseParen => {} // Already pushed
-            // Deny trailing operands
-            Add | Sub | Mul | OpenParen => {
-                Err(ParseError::IllegalExpression { index: left.index })?
-            }
-        }
-        Ok(Normalized(normalized))
     }
 }
 
-fn normalize_pair(
-    res: &mut Vec<Token>,
-    left: Token,
-    right: IndexedToken,
-) -> Result<(), ParseError> {
-    use Token::*;
+#[derive(Debug, Clone)]
+pub(super) struct Normalized(Vec<NormToken>);
 
-    // Assume left already pushed
-    // Assume all parens balanced
-    match left {
-        // Expression
-        Num(_) | Die(_) | CloseParen => match right.token {
-            Num(_) | Die(_) | OpenParen => {
-                res.push(Mul);
-                res.push(right.token);
-            }
-            Add | Sub | Mul | CloseParen => res.push(right.token),
-        },
-        // Operands
-        Add | Sub | Mul => match right.token {
-            Num(_) | Die(_) | OpenParen => {
-                res.push(right.token);
-            }
-            Add | Sub | Mul | CloseParen => {
-                Err(ParseError::IllegalExpression { index: right.index })?
-            }
-        },
-        // Expression start
-        OpenParen => match right.token {
-            Num(_) | Die(_) | OpenParen => res.push(right.token),
-            // Prepend '+' or '-' with Num(0) token
-            Add | Sub => {
-                res.push(Num(0));
-                res.push(right.token)
-            }
-            Mul | CloseParen => Err(ParseError::IllegalExpression { index: right.index })?,
-        },
-    }
-    Ok(())
+#[derive(Debug, Clone)]
+enum NormToken {
+    Op(Op),
+    Val(Val),
+    Expr(Normalized),
 }
-
-pub(super) struct Normalized(Vec<Token>);
 
 impl Normalized {
     pub(super) fn to_expr(self) -> Expr {
-        Normalized::parse_recursive(ParsedExpr::None, self.0.as_slice()).expr
+        Normalized::to_expr_recursive(ParsedExpr::None, self.0.as_slice())
     }
 
-    fn parse_recursive(e: ParsedExpr, tokens: &[Token]) -> Parsed {
+    fn to_expr_recursive(e: ParsedExpr, tokens: &[NormToken]) -> Expr {
+        let get_expr = |token: &NormToken| match token {
+            NormToken::Val(v) => Expr::Value(*v),
+            NormToken::Expr(e) => Normalized::to_expr_recursive(ParsedExpr::None, &e.0),
+            NormToken::Op(_) => unreachable!(),
+        };
         let prio = |op: Op| match op {
             Op::Add => 1,
             Op::Sub => 1,
             Op::Mul => 2,
         };
-        let get_op = |t: Token| match t {
-            Token::Add => Op::Add,
-            Token::Sub => Op::Sub,
-            Token::Mul => Op::Mul,
-            _ => unreachable!(),
-        };
-        let get_val = |tokens: &[Token]| match tokens[0] {
-            Token::Die(n) => Parsed::new(1, Expr::Value(Val::Die(n))),
-            Token::Num(n) => Parsed::new(1, Expr::Value(Val::Num(n))),
-            Token::OpenParen => {
-                Normalized::parse_recursive(ParsedExpr::None, &tokens[1..]).shift(1)
-            }
-            _ => unreachable!(),
-        };
-        let next_op = |tokens: &[Token]| {
-            let mut depth = 0;
-            tokens.iter().find_map(|t| match t {
-                Token::Add if depth == 0 => Some(Op::Add),
-                Token::Sub if depth == 0 => Some(Op::Sub),
-                Token::Mul if depth == 0 => Some(Op::Mul),
-                Token::OpenParen => {
-                    depth += 1;
-                    None
-                }
-                Token::CloseParen => {
-                    depth -= 1;
-                    None
-                }
-                _ => None,
-            })
-        };
 
         match e {
             ParsedExpr::None => {
-                if let Some(token) = tokens.get(0) {
-                    let p = get_val(tokens);
-                    Normalized::parse_recursive(ParsedExpr::Expr(p.expr), &tokens[p.shift..])
-                        .shift(p.shift)
-                } else {
-                    unreachable!()
-                }
+                let e = get_expr(&tokens[0]);
+                Normalized::to_expr_recursive(ParsedExpr::Expr(e), &tokens[1..])
             }
-            ParsedExpr::Expr(e) => {
-                let token = tokens.get(0);
-                if token == None || token == Some(&Token::CloseParen) {
-                    Parsed::new(1, e)
-                } else {
-                    let op = get_op(tokens[0]);
-                    Normalized::parse_recursive(ParsedExpr::Half { op, left: e }, &tokens[1..])
-                        .shift(1)
-                }
-            }
+            ParsedExpr::Expr(e) => match tokens.get(0) {
+                None => e,
+                Some(NormToken::Op(op)) => Normalized::to_expr_recursive(
+                    ParsedExpr::Half { op: *op, left: e },
+                    &tokens[1..],
+                ),
+                Some(NormToken::Expr(_)) | Some(NormToken::Val(_)) => unreachable!(),
+            },
             ParsedExpr::Half { op, left } => {
-                if next_op(tokens).map(|next_op| prio(op) < prio(next_op)) == Some(true) {
-                    let p = Normalized::parse_recursive(ParsedExpr::None, &tokens);
-                    Parsed::new(
-                        p.shift,
-                        Expr::Expr {
-                            op,
-                            left: Box::new(left),
-                            right: Box::new(p.expr),
-                        },
-                    )
+                let next_op = tokens.iter().find_map(|t| match t {
+                    NormToken::Op(o) => Some(o),
+                    _ => None,
+                });
+                if next_op.map(|next_op| prio(op) < prio(*next_op)) == Some(true) {
+                    let right = Normalized::to_expr_recursive(ParsedExpr::None, &tokens);
+                    Expr::Expr {
+                        op,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    }
                 } else {
-                    let p = get_val(tokens);
+                    let right = get_expr(&tokens[0]);
                     let expr = Expr::Expr {
                         op,
                         left: Box::new(left),
-                        right: Box::new(p.expr),
+                        right: Box::new(right),
                     };
-                    Normalized::parse_recursive(ParsedExpr::Expr(expr), &tokens[p.shift..])
-                        .shift(p.shift)
+                    Normalized::to_expr_recursive(ParsedExpr::Expr(expr), &tokens[1..])
                 }
             }
         }
@@ -274,52 +265,37 @@ enum ParsedExpr {
     Half { op: Op, left: Expr },
 }
 
-struct Parsed {
-    shift: usize,
-    expr: Expr,
-}
-
-impl Parsed {
-    fn new(shift: usize, expr: Expr) -> Self {
-        Parsed { shift, expr }
-    }
-    fn shift(self, s: usize) -> Self {
-        Self {
-            shift: self.shift + s,
-            ..self
-        }
-    }
-}
-
-#[cfg(all(test, target_arch = "wasm32"))]
+#[cfg(test)]
 mod test {
     use wasm_bindgen_test::*;
 
     use super::*;
 
+    #[test]
     #[wasm_bindgen_test]
     fn tokenize_expr_ok() {
-        use Token::*;
-
         let expr = "d20 - 3 + 2(d6 * 2)";
         let tokens = Tokens::from_str(expr).expect("Unable to tokenize valid expr");
         assert_eq!(
             tokens.0,
             vec![
-                IndexedToken::new(0, Die(20)),
-                IndexedToken::new(4, Sub),
-                IndexedToken::new(6, Num(3)),
-                IndexedToken::new(8, Add),
-                IndexedToken::new(10, Num(2)),
-                IndexedToken::new(11, OpenParen),
-                IndexedToken::new(12, Die(6)),
-                IndexedToken::new(15, Mul),
-                IndexedToken::new(17, Num(2)),
-                IndexedToken::new(18, CloseParen),
+                IndexedToken::begin(0),
+                IndexedToken::value(0, Val::Die(Die::new(20))),
+                IndexedToken::operation(4, Op::Sub),
+                IndexedToken::value(6, Val::Num(3)),
+                IndexedToken::operation(8, Op::Add),
+                IndexedToken::value(10, Val::Num(2)),
+                IndexedToken::begin(11),
+                IndexedToken::value(12, Val::Die(Die::new(6))),
+                IndexedToken::operation(15, Op::Mul),
+                IndexedToken::value(17, Val::Num(2)),
+                IndexedToken::end(18),
+                IndexedToken::end(18),
             ]
         );
     }
 
+    #[test]
     #[wasm_bindgen_test]
     fn tokenize_expr_unexpected_token() {
         let expr = "d20 * 200%";
@@ -333,6 +309,7 @@ mod test {
         )
     }
 
+    #[test]
     #[wasm_bindgen_test]
     fn tokenize_expr_bad_die() {
         let expr = "d20 + d0 * 3";

@@ -43,7 +43,7 @@ impl Expr {
     fn throw(self) -> i64 {
         match self {
             Self::Value(Val::Num(n)) => n as i64,
-            Self::Value(Val::Die(d)) => (rand::random::<u32>() % d + 1) as i64,
+            Self::Value(Val::Die(d)) => (rand::random::<u32>() % d.edges + 1) as i64,
             Self::Expr {
                 op: Op::Mul,
                 left,
@@ -73,15 +73,39 @@ impl Expr {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Op {
     Add,
     Sub,
     Mul,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Val {
     Num(u32),
-    Die(u32),
+    Die(Die),
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+struct Die {
+    edges: u32,
+    rolls: u32,
+    drop_lowest: u32,
+    drop_highest: u32,
+}
+
+impl Die {
+    fn new(edges: u32) -> Self {
+        Die {
+            edges,
+            rolls: 1,
+            drop_lowest: 0,
+            drop_highest: 0,
+        }
+    }
+
+    fn rolls(mut self, n: u32) -> Self {
+        self.rolls = n;
+        self
+    }
 }
