@@ -1,6 +1,6 @@
 module Component.ThrowDice exposing (Model, Msg, init, responseMsg, update, view)
 
-import Element exposing (Element, centerX, centerY, column, el, height, none, px, spacing, text, width)
+import Element exposing (Element, alignLeft, centerX, centerY, column, el, height, none, px, row, spacing, text, width)
 import Element.Input as Input
 import Element.Region as Region
 import Html.Events
@@ -18,12 +18,19 @@ expressionPlaceholder =
 type alias Model =
     { expr : String
     , result : String
+    , error : Maybe ErrorInfo
+    }
+
+
+type alias ErrorInfo =
+    { index : Int
+    , description : String
     }
 
 
 init : Model
 init =
-    Model "" ""
+    Model "" "" Nothing
 
 
 type Msg
@@ -45,7 +52,7 @@ update : Msg -> Session -> Model -> ( Model, PageMsg, Cmd Msg )
 update msg _ model =
     case msg of
         Expr val ->
-            ( { model | expr = val }, PageMsg.None, Cmd.none )
+            ( { model | expr = val, error = Nothing }, PageMsg.None, Cmd.none )
 
         Submit ->
             let
@@ -56,33 +63,33 @@ update msg _ model =
                     else
                         model.expr
             in
-            ( model, PageMsg.None, Port.calculateDice expr )
+            ( { model | error = Nothing, result = "" }, PageMsg.None, Port.calculateDice expr )
 
         Response result ->
             let
-                str =
+                new_model =
                     case result of
                         Ok res ->
-                            String.fromInt res.result
+                            { model | result = String.fromInt res.result }
 
                         Err error ->
                             case error of
-                                UnexpectedToken { index, token } ->
-                                    "Error: Unexpected token '" ++ token ++ "' at character " ++ String.fromInt (index + 1)
+                                UnexpectedToken index token ->
+                                    { model | error = Just <| ErrorInfo index ("Unexpected token '" ++ token ++ "'") }
 
                                 BadDie index ->
-                                    "Error: Bad die at character " ++ String.fromInt (index + 1)
+                                    { model | error = Just <| ErrorInfo index "Bad die" }
 
                                 IllegalExpression index ->
-                                    "Error: Illegal expression at character " ++ String.fromInt (index + 1)
+                                    { model | error = Just <| ErrorInfo index "Illegal expression" }
 
                                 UnmatchedParen index ->
-                                    "Error: Unmatched parenthesis at character " ++ String.fromInt (index + 1)
+                                    { model | error = Just <| ErrorInfo index "Unmatched parenthesis" }
 
                                 EmptyExpression index ->
-                                    "Error: Empty expression at character " ++ String.fromInt (index + 1)
+                                    { model | error = Just <| ErrorInfo index "Empty expression" }
             in
-            ( { model | result = str }, PageMsg.None, Cmd.none )
+            ( new_model, PageMsg.None, Cmd.none )
 
 
 
@@ -100,8 +107,16 @@ view model =
             , placeholder = Just <| Input.placeholder [] <| text expressionPlaceholder
             , label = Input.labelAbove [] <| text "Expression:"
             }
-        , el (textStyle [ centerX ]) (text model.result)
-        , Input.button (buttonStyle [ centerX, height (px 50), width (px 150) ]) { onPress = Just Submit, label = el [ centerX ] <| text "Submit" }
+        , case model.error of
+            Just e ->
+                row (textStyle [])
+                    [ el [ Element.transparent True ] (text <| String.slice 0 e.index model.expr) -- offset
+                    , text ("^ " ++ e.description) -- error
+                    ]
+
+            Nothing ->
+                el (textStyle [ centerX ]) (text model.result)
+        , Input.button (buttonStyle [ centerX, height (px 50), width (px 150) ]) { onPress = Just Submit, label = el [ centerX ] <| text "Throw" }
         ]
 
 

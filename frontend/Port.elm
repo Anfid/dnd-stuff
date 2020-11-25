@@ -27,7 +27,7 @@ type alias CalculateResponse =
 
 
 type ParseError
-    = UnexpectedToken { index : Int, token : String }
+    = UnexpectedToken Int String
     | BadDie Int
     | IllegalExpression Int
     | UnmatchedParen Int
@@ -62,7 +62,7 @@ parseErrorDecoder : String -> Decoder ParseError
 parseErrorDecoder errkind =
     case errkind of
         "unexpected_token" ->
-            map UnexpectedToken <| map2 (\i t -> { index = i, token = t }) (field "index" int) (field "token" string)
+            map2 UnexpectedToken (field "index" int) (field "token" string)
 
         "bad_die" ->
             map BadDie (field "index" int)
