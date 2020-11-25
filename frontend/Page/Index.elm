@@ -1,12 +1,13 @@
 module Page.Index exposing (Model, Msg, init, responseMsg, update, view)
 
+import Component.AnalyzeDice as AnalyzeDiceComponent
 import Component.Bar as BarComponent
 import Component.ThrowDice as ThrowDiceComponent
 import Element exposing (fill, spacing, width)
 import Element.Background as Background
 import Html exposing (Html)
 import PageMsg exposing (PageMsg)
-import Port exposing (Response(..))
+import Port exposing (Response)
 import Session exposing (Session)
 import Style exposing (bgColor)
 
@@ -18,13 +19,22 @@ import Style exposing (bgColor)
 type alias Model =
     { bar : BarComponent.Model
     , throwDice : ThrowDiceComponent.Model
+    , analyzeDice : AnalyzeDiceComponent.Model
+    , shown : ActiveComponent
     }
+
+
+type ActiveComponent
+    = Throw
+    | Analyze
 
 
 init : Model
 init =
     { bar = BarComponent.init
     , throwDice = ThrowDiceComponent.init
+    , analyzeDice = AnalyzeDiceComponent.init
+    , shown = Analyze
     }
 
 
@@ -35,6 +45,7 @@ init =
 type Msg
     = BarMsg BarComponent.Msg
     | ThrowDiceMsg ThrowDiceComponent.Msg
+    | AnalyzeDiceMsg AnalyzeDiceComponent.Msg
     | ExternalResponse Response
 
 
@@ -52,14 +63,24 @@ update msg session model =
         ThrowDiceMsg m ->
             handleUpdate updateThrowDiceModel ThrowDiceMsg model <| ThrowDiceComponent.update m session model.throwDice
 
+        AnalyzeDiceMsg m ->
+            handleUpdate updateAnalyzeDiceModel AnalyzeDiceMsg model <| AnalyzeDiceComponent.update m session model.analyzeDice
+
         ExternalResponse resp ->
             case resp of
-                Calculate calculateResponse ->
+                Port.Calculate calculateResponse ->
                     handleUpdate updateThrowDiceModel ThrowDiceMsg model <|
                         ThrowDiceComponent.update
                             (ThrowDiceComponent.responseMsg calculateResponse)
                             session
                             model.throwDice
+
+                Port.Analyze analyzeResponse ->
+                    handleUpdate updateAnalyzeDiceModel AnalyzeDiceMsg model <|
+                        AnalyzeDiceComponent.update
+                            (AnalyzeDiceComponent.responseMsg analyzeResponse)
+                            session
+                            model.analyzeDice
 
 
 handleUpdate :
@@ -73,7 +94,10 @@ handleUpdate toModel toMsg model ( subModel, pageMsg, subCmd ) =
         newModel =
             case pageMsg of
                 PageMsg.ShowThrowDice ->
-                    { model | throwDice = ThrowDiceComponent.init }
+                    { model | shown = Throw }
+
+                PageMsg.ShowAnalyzeDice ->
+                    { model | shown = Analyze }
 
                 _ ->
                     model
@@ -91,6 +115,11 @@ updateThrowDiceModel throwDiceModel model =
     { model | throwDice = throwDiceModel }
 
 
+updateAnalyzeDiceModel : AnalyzeDiceComponent.Model -> Model -> Model
+updateAnalyzeDiceModel analyzeDiceModel model =
+    { model | analyzeDice = analyzeDiceModel }
+
+
 
 -- VIEW
 
@@ -98,7 +127,12 @@ updateThrowDiceModel throwDiceModel model =
 view : Model -> Html Msg
 view model =
     Element.layout [ Background.color bgColor ] <|
-        Element.column [ width fill, spacing 40 ]
+        Element.column [ width fill, spacing 40, Background.color bgColor ]
             [ Element.map BarMsg <| BarComponent.view model.bar
-            , Element.map ThrowDiceMsg <| ThrowDiceComponent.view model.throwDice
+            , case model.shown of
+                Analyze ->
+                    Element.map AnalyzeDiceMsg <| AnalyzeDiceComponent.view model.analyzeDice
+
+                Throw ->
+                    Element.map ThrowDiceMsg <| ThrowDiceComponent.view model.throwDice
             ]

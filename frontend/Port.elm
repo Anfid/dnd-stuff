@@ -1,6 +1,17 @@
-port module Port exposing (CalculateResponse, ParseError(..), Response(..), calculateDice, decodeResp, messageReceiver, sendMessage)
+port module Port exposing
+    ( AnalyzeResponse
+    , CalculateResponse
+    , ParseError(..)
+    , Response(..)
+    , analyzeDice
+    , calculateDice
+    , decodeResp
+    , messageReceiver
+    , sendMessage
+    )
 
-import Json.Decode as Decode exposing (Decoder, andThen, at, decodeString, fail, field, int, map, map2, oneOf, string)
+import Array exposing (Array)
+import Json.Decode as Decode exposing (Decoder, andThen, array, at, decodeString, fail, field, int, map, map2, oneOf, string)
 import Json.Encode as Encode
 
 
@@ -20,10 +31,17 @@ port messageReceiver : (String -> msg) -> Sub msg
 
 type Response
     = Calculate (Result ParseError CalculateResponse)
+    | Analyze (Result ParseError AnalyzeResponse)
 
 
 type alias CalculateResponse =
     { result : Int }
+
+
+type alias AnalyzeResponse =
+    { offset : Int
+    , values : Array Int
+    }
 
 
 type ParseError
@@ -49,6 +67,13 @@ commandDecoder command =
                     , map Ok calculateDecoder
                     ]
 
+        "analyze_dice" ->
+            map Analyze <|
+                oneOf
+                    [ at [ "error" ] string |> andThen parseErrorDecoder |> map Err
+                    , map Ok analyzeDecoder
+                    ]
+
         _ ->
             fail "Unknown command"
 
@@ -56,6 +81,11 @@ commandDecoder command =
 calculateDecoder : Decoder CalculateResponse
 calculateDecoder =
     map CalculateResponse (field "result" int)
+
+
+analyzeDecoder : Decoder AnalyzeResponse
+analyzeDecoder =
+    map2 AnalyzeResponse (at [ "result", "offset" ] int) (at [ "result", "values" ] (array int))
 
 
 parseErrorDecoder : String -> Decoder ParseError
@@ -91,6 +121,19 @@ calculateDice expr =
             Encode.encode 0 <|
                 Encode.object
                     [ ( "command", Encode.string "calculate_dice" )
+                    , ( "expression", Encode.string expr )
+                    ]
+    in
+    sendMessage body
+
+
+analyzeDice : String -> Cmd msg
+analyzeDice expr =
+    let
+        body =
+            Encode.encode 0 <|
+                Encode.object
+                    [ ( "command", Encode.string "analyze_dice" )
                     , ( "expression", Encode.string expr )
                     ]
     in
