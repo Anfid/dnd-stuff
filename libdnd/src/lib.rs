@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::*;
 mod dto;
 mod hand;
 
-use dto::{CalculateResponse, Dice, Request, Response};
+use dto::{AnalyzeResponse, CalculateResponse, Dice, Request, Response};
 use hand::{Hand, ParseError};
 
 #[wasm_bindgen]
@@ -14,7 +14,7 @@ pub fn message_dispatcher(msg: &str) -> JsValue {
     let response = if let Ok(message) = serde_json::from_str(msg) {
         match message {
             Request::CalculateDice(Dice { expression }) => calculate_dice(expression).into(),
-            Request::AnalyzeDice(Dice { expression: _ }) => todo!(),
+            Request::AnalyzeDice(Dice { expression }) => analyze_dice(expression).into(),
         }
     } else {
         Response::MessageParseError
@@ -27,8 +27,10 @@ fn calculate_dice(expr: String) -> Result<CalculateResponse, ParseError> {
 }
 
 #[allow(unused)]
-fn analyze_dice(_expr: String) -> String {
-    format!("AnalyzeDice unimplemented")
+fn analyze_dice(expr: String) -> Result<AnalyzeResponse, ParseError> {
+    Hand::from_str(expr.as_str()).map(|h| AnalyzeResponse {
+        result: h.analyze(),
+    })
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]

@@ -1,4 +1,4 @@
-use crate::hand::ParseError;
+use crate::hand::{FreqGraph, ParseError};
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -16,7 +16,7 @@ where
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Response {
     CalculateDice(CommandResult<CalculateResponse, ParseError>),
-    AnalyzeDice,
+    AnalyzeDice(CommandResult<AnalyzeResponse, ParseError>),
     MessageParseError,
 }
 
@@ -29,9 +29,23 @@ impl From<Result<CalculateResponse, ParseError>> for Response {
     }
 }
 
+impl From<Result<AnalyzeResponse, ParseError>> for Response {
+    fn from(res: Result<AnalyzeResponse, ParseError>) -> Self {
+        match res {
+            Ok(res) => Response::AnalyzeDice(CommandResult::Result(res)),
+            Err(e) => Response::AnalyzeDice(CommandResult::Error(e)),
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct CalculateResponse {
     pub result: i64,
+}
+
+#[derive(Serialize)]
+pub struct AnalyzeResponse {
+    pub result: FreqGraph,
 }
 
 #[derive(Deserialize)]

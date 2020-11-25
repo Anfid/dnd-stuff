@@ -1,6 +1,5 @@
-use super::{Die, Expr, Hand, Op, Val};
+use super::{Die, Expr, Op, Val};
 use serde_derive::Serialize;
-use std::convert::TryFrom;
 use std::str::FromStr;
 
 #[derive(Debug, Eq, PartialEq, Serialize)]
@@ -67,43 +66,40 @@ impl FromStr for Tokens {
         let mut tokens = Vec::new();
         let mut chars = expr.chars().enumerate().peekable();
         tokens.push(IndexedToken::begin(0));
-        while let Some((idx, c)) = chars.next() {
+        while let Some((index, c)) = chars.next() {
             let token = match c {
                 // Digits
                 '0'..='9' => {
                     let mut num = c as u32 - '0' as u32;
-                    while let Some((_, c @ '0'..='9')) = chars.peek() {
+                    while let Some((_, '0'..='9')) = chars.peek() {
                         // Advance the iterator
                         let (_, c) = chars.next().unwrap();
                         num = num * 10 + c as u32 - '0' as u32
                     }
-                    IndexedToken::value(idx, Val::Num(num))
+                    IndexedToken::value(index, Val::Num(num))
                 }
                 // Die
                 'd' => {
                     let mut num = 0;
-                    while let Some((_, c @ '0'..='9')) = chars.peek() {
+                    while let Some((_, '0'..='9')) = chars.peek() {
                         // Advance the iterator
                         let (_, c) = chars.next().unwrap();
                         num = num * 10 + c as u32 - '0' as u32
                     }
                     if num > 0 {
-                        IndexedToken::value(idx, Val::Die(Die::new(num)))
+                        IndexedToken::value(index, Val::Die(Die::new(num)))
                     } else {
-                        Err(ParseError::BadDie { index: idx })?
+                        Err(ParseError::BadDie { index })?
                     }
                 }
                 // Skip whitespace
                 ' ' | '\t' | '\n' => continue,
-                '+' => IndexedToken::operation(idx, Op::Add),
-                '-' => IndexedToken::operation(idx, Op::Sub),
-                '*' => IndexedToken::operation(idx, Op::Mul),
-                '(' | '[' | '{' => IndexedToken::begin(idx),
-                ')' | ']' | '}' => IndexedToken::end(idx),
-                token => Err(ParseError::UnexpectedToken {
-                    index: idx,
-                    token: c,
-                })?,
+                '+' => IndexedToken::operation(index, Op::Add),
+                '-' => IndexedToken::operation(index, Op::Sub),
+                '*' => IndexedToken::operation(index, Op::Mul),
+                '(' | '[' | '{' => IndexedToken::begin(index),
+                ')' | ']' | '}' => IndexedToken::end(index),
+                token => Err(ParseError::UnexpectedToken { index, token })?,
             };
             tokens.push(token);
         }
