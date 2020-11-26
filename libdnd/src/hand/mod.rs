@@ -107,26 +107,26 @@ impl Expr {
 #[derive(Debug, Clone, Serialize)]
 pub struct FreqGraph {
     offset: i64,
-    values: Vec<u64>,
+    values: Vec<f64>,
 }
 
 impl FreqGraph {
     fn val(n: u32) -> Self {
         Self {
             offset: n as i64,
-            values: vec![1],
+            values: vec![1f64],
         }
     }
 
     fn die(d: u32) -> Self {
-        let vec = vec![1; d as usize];
+        let vec = vec![1f64; d as usize];
         Self {
             offset: 1,
             values: vec,
         }
     }
 
-    fn times(self, t: u64) -> Self {
+    fn times(self, t: f64) -> Self {
         Self {
             values: self.values.into_iter().map(|f| f * t).collect(),
             offset: self.offset,
@@ -140,7 +140,7 @@ impl std::ops::Add for FreqGraph {
     fn add(self, rhs: Self) -> Self::Output {
         let len = self.values.len() + rhs.values.len() - 1;
         let mut values = Vec::with_capacity(len);
-        values.resize(len, 0);
+        values.resize(len, 0f64);
         for (ln, lfreq) in self.values.iter().enumerate() {
             for (rn, rfreq) in rhs.values.iter().enumerate() {
                 values[ln + rn] = values[ln + rn] + lfreq * rfreq;
@@ -159,7 +159,7 @@ impl std::ops::Sub for FreqGraph {
     fn sub(self, rhs: Self) -> Self::Output {
         let len = self.values.len() + rhs.values.len() - 1;
         let mut values = Vec::with_capacity(len);
-        values.resize(len, 0);
+        values.resize(len, 0f64);
         for (ln, lfreq) in self.values.iter().enumerate() {
             for (rn, rfreq) in rhs.values.iter().enumerate() {
                 values[ln + rn] = values[ln + rn] + lfreq * rfreq;
@@ -183,7 +183,7 @@ impl std::ops::Mul for FreqGraph {
         let offset = self.offset * rhs.offset;
         let len = max - offset;
         let mut values = Vec::with_capacity(len as usize);
-        values.resize(len as usize, 0);
+        values.resize(len as usize, 0f64);
         for (ln, lfreq) in self.values.iter().enumerate() {
             for (rn, rfreq) in rhs.values.iter().enumerate() {
                 let res = ((ln as i64 + self.offset) * (rn as i64 + rhs.offset) - offset) as usize;

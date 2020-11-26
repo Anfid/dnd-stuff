@@ -29,8 +29,8 @@ type alias Model =
 
 type alias AnalyzeData =
     { offset : Int
-    , values : Array Int
-    , total : Int
+    , values : Array Float
+    , total : Float
     }
 
 
@@ -174,7 +174,7 @@ dataToCollage data =
             collageW / toFloat len
 
         scaledChance v =
-            collageH * toFloat v / toFloat data.total
+            collageH * v / data.total
     in
     Collage.group
         [ scale data.offset |> Collage.shift ( barWidth / 2, -15 )
