@@ -177,7 +177,9 @@ impl std::ops::Mul for FreqGraph {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        let max = (self.values.len() as i64 + self.offset) * (rhs.values.len() as i64 + rhs.offset);
+        let max = (self.values.len() as i64 - 1 + self.offset)
+            * (rhs.values.len() as i64 - 1 + rhs.offset)
+            + 1;
         let offset = self.offset * rhs.offset;
         let len = max - offset;
         let mut values = Vec::with_capacity(len as usize);
