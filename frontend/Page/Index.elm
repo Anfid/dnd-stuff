@@ -126,7 +126,7 @@ updateAnalyzeDiceModel analyzeDiceModel model =
 
 view : Model -> Html Msg
 view model =
-    Element.layout [ Background.color bgColor ] <|
+    Element.layout [ Background.color bgColor, Element.scrollbarY, Element.height Element.fill ] <|
         Element.column [ width fill, spacing 40, Background.color bgColor ]
             [ Element.map BarMsg <| BarComponent.view model.bar
             , case model.shown of

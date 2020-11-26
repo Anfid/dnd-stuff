@@ -1,6 +1,9 @@
 module Component.AnalyzeDice exposing (Model, Msg, init, responseMsg, update, view)
 
 import Array exposing (Array)
+import Collage exposing (Collage)
+import Collage.Render as Render
+import Collage.Text as Text exposing (Text)
 import Element exposing (Element, centerX, centerY, column, el, height, none, px, row, spacing, text, width)
 import Element.Background as Background
 import Element.Input as Input
@@ -8,7 +11,7 @@ import Element.Region as Region
 import PageMsg exposing (PageMsg)
 import Port exposing (AnalyzeResponse, ParseError(..))
 import Session exposing (Session)
-import Style exposing (bgColor, buttonStyle, headingStyle, inputFieldStyle, textStyle)
+import Style exposing (bgColor, buttonStyle, headingStyle, inputFieldStyle, redColor, textStyle)
 import Util exposing (onEnter)
 
 
@@ -58,11 +61,12 @@ responseMsg res =
 
 
 update : Msg -> Session -> Model -> ( Model, PageMsg, Cmd Msg )
-update msg _ model =
+update msg s model =
     case msg of
         Expr val ->
-            ( { model | expr = val, error = Nothing }, PageMsg.None, Cmd.none )
+            update Submit s { model | expr = val, error = Nothing }
 
+        --( { model | expr = val, error = Nothing }, PageMsg.None, Cmd.none )
         Submit ->
             let
                 expr =
@@ -89,23 +93,28 @@ update msg _ model =
                             }
 
                         Err error ->
-                            case error of
-                                UnexpectedToken index token ->
-                                    { model | error = Just <| ErrorInfo index ("Unexpected token '" ++ token ++ "'") }
-
-                                BadDie index ->
-                                    { model | error = Just <| ErrorInfo index "Bad die" }
-
-                                IllegalExpression index ->
-                                    { model | error = Just <| ErrorInfo index "Illegal expression" }
-
-                                UnmatchedParen index ->
-                                    { model | error = Just <| ErrorInfo index "Unmatched parenthesis" }
-
-                                EmptyExpression index ->
-                                    { model | error = Just <| ErrorInfo index "Empty expression" }
+                            { model | error = Just <| errorToInfo error }
             in
             ( new_model, PageMsg.None, Cmd.none )
+
+
+errorToInfo : ParseError -> ErrorInfo
+errorToInfo error =
+    case error of
+        UnexpectedToken index token ->
+            ErrorInfo index ("Unexpected token '" ++ token ++ "'")
+
+        BadDie index ->
+            ErrorInfo index "Bad die"
+
+        IllegalExpression index ->
+            ErrorInfo index "Illegal expression"
+
+        UnmatchedParen index ->
+            ErrorInfo index "Unmatched parenthesis"
+
+        EmptyExpression index ->
+            ErrorInfo index "Empty expression"
 
 
 
@@ -121,7 +130,7 @@ view model =
             { onChange = Expr
             , text = model.expr
             , placeholder = Just <| Input.placeholder [] <| text expressionPlaceholder
-            , label = Input.labelAbove [] <| text "Expression:"
+            , label = Input.labelAbove [] <| el (textStyle []) <| text "Expression:"
             }
         , case model.error of
             Just e ->
@@ -135,24 +144,68 @@ view model =
         , Input.button (buttonStyle [ centerX, height (px 50), width (px 150) ]) { onPress = Just Submit, label = el [ centerX ] <| text "Show" }
         , case model.result of
             Just res ->
-                column (textStyle [ Background.color bgColor ])
-                    (Array.toList <| Array.map (\v -> text <| nHashes <| percent v res.total) res.values)
+                el (textStyle [ Background.color bgColor ]) <|
+                    Element.html <|
+                        Render.svg <|
+                            dataToCollage res
 
             Nothing ->
                 none
         ]
 
 
-percent : Int -> Int -> Int
-percent val total =
-    round <| 50 * toFloat val / toFloat total
+collageW : Float
+collageW =
+    300
 
 
-nHashes : Int -> String
-nHashes n =
-    case n of
-        0 ->
-            ""
+collageH : Float
+collageH =
+    250
 
-        _ ->
-            "#" ++ nHashes (n - 1)
+
+dataToCollage : AnalyzeData -> Collage msg
+dataToCollage data =
+    let
+        len =
+            Array.length data.values
+
+        barWidth =
+            collageW / toFloat len
+
+        scaledChance v =
+            collageH * toFloat v / toFloat data.total
+    in
+    Collage.group
+        [ scale data.offset |> Collage.shift ( barWidth / 2, -15 )
+        , scale (data.offset + len // 2) |> Collage.shift ( collageW / 2, -15 )
+        , scale (data.offset + len - 1) |> Collage.shift ( collageW - barWidth / 2, -15 )
+        , Collage.path [ ( 0, collageH + 15 ), ( 0, 0 ), ( collageW + 15, 0 ) ]
+            |> Collage.traced
+                (Collage.solid 2 <| Collage.uniform <| Style.toColor Style.greenBrightColor)
+        , Collage.filled
+            (Collage.uniform <| Style.toColor redColor)
+          <|
+            Collage.polygon <|
+                (::) ( 0, 0 ) <|
+                    List.concat <|
+                        Array.toList <|
+                            Array.push [ ( collageW, 0 ) ] <|
+                                Array.indexedMap
+                                    (\i v ->
+                                        [ ( toFloat i * barWidth, scaledChance v )
+                                        , ( toFloat (i + 1) * barWidth, scaledChance v )
+                                        ]
+                                    )
+                                    data.values
+        ]
+
+
+scale : Int -> Collage msg
+scale =
+    Collage.rendered << styleScale << Text.fromString << String.fromInt
+
+
+styleScale : Text -> Text
+styleScale =
+    Text.typeface Text.Monospace >> Text.color (Style.toColor Style.fgColor) >> Text.size Text.normal

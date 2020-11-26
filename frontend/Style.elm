@@ -1,19 +1,21 @@
 module Style exposing
     ( bgColor
     , buttonStyle
-    , headingStyle
     , fgColor
     , greenBrightColor
     , greenColor
     , greenFadedColor
+    , headingStyle
     , inputFieldStyle
     , redBrightColor
     , redColor
     , redFadedColor
     , textStyle
+    , toColor
     )
 
-import Element exposing (Color, focused, mouseDown, mouseOver, padding, rgb255, centerX)
+import Color
+import Element exposing (Color, centerX, focused, mouseDown, mouseOver, padding, rgb255)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
@@ -62,6 +64,19 @@ inputFieldStyle s =
            , Font.family [ Font.serif ]
            , focused [ Border.color greenBrightColor ]
            ]
+
+
+
+-- COLORS
+
+
+toColor : Color -> Color.Color
+toColor c =
+    let
+        { red, green, blue, alpha } =
+            Element.toRgb c
+    in
+    Color.rgba red green blue alpha
 
 
 bgColor : Color

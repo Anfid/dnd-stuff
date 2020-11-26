@@ -89,7 +89,7 @@ update msg model =
                 |> handleUpdate Index IndexMsg model
 
         ( Recv str, Index subModel ) ->
-            case decodeResp (Debug.log "Received message" str) of
+            case decodeResp str of
                 Ok response ->
                     Page.Index.update (Page.Index.responseMsg response) model.session subModel
                         |> handleUpdate Index IndexMsg model

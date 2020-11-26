@@ -73,23 +73,28 @@ update msg _ model =
                             { model | result = String.fromInt res.result }
 
                         Err error ->
-                            case error of
-                                UnexpectedToken index token ->
-                                    { model | error = Just <| ErrorInfo index ("Unexpected token '" ++ token ++ "'") }
-
-                                BadDie index ->
-                                    { model | error = Just <| ErrorInfo index "Bad die" }
-
-                                IllegalExpression index ->
-                                    { model | error = Just <| ErrorInfo index "Illegal expression" }
-
-                                UnmatchedParen index ->
-                                    { model | error = Just <| ErrorInfo index "Unmatched parenthesis" }
-
-                                EmptyExpression index ->
-                                    { model | error = Just <| ErrorInfo index "Empty expression" }
+                            { model | error = Just <| errorToInfo error }
             in
             ( new_model, PageMsg.None, Cmd.none )
+
+
+errorToInfo : ParseError -> ErrorInfo
+errorToInfo error =
+    case error of
+        UnexpectedToken index token ->
+            ErrorInfo index ("Unexpected token '" ++ token ++ "'")
+
+        BadDie index ->
+            ErrorInfo index "Bad die"
+
+        IllegalExpression index ->
+            ErrorInfo index "Illegal expression"
+
+        UnmatchedParen index ->
+            ErrorInfo index "Unmatched parenthesis"
+
+        EmptyExpression index ->
+            ErrorInfo index "Empty expression"
 
 
 
@@ -105,7 +110,7 @@ view model =
             { onChange = Expr
             , text = model.expr
             , placeholder = Just <| Input.placeholder [] <| text expressionPlaceholder
-            , label = Input.labelAbove [] <| text "Expression:"
+            , label = Input.labelAbove [] <| el (textStyle []) <| text "Expression:"
             }
         , case model.error of
             Just e ->
