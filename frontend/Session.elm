@@ -5,5 +5,4 @@ import Browser.Navigation as Navigation
 
 type alias Session =
     { key : Navigation.Key
-    , expr : String
     }

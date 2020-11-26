@@ -1,4 +1,4 @@
-module Component.AnalyzeDice exposing (Model, Msg, init, responseMsg, update, view)
+module Component.Dice exposing (Model, Msg, analyzeResponseMsg, calculateResponseMsg, errorResponseMsg, init, update, view)
 
 import Array exposing (Array)
 import Collage exposing (Collage)
@@ -9,7 +9,7 @@ import Element.Background as Background
 import Element.Input as Input
 import Element.Region as Region
 import PageMsg exposing (PageMsg)
-import Port exposing (AnalyzeResponse, ParseError(..))
+import Port exposing (AnalyzeResponse, CalculateResponse, ParseError(..))
 import Session exposing (Session)
 import Style exposing (bgColor, buttonStyle, headingStyle, inputFieldStyle, redColor, textStyle)
 import Util exposing (onEnter)
@@ -22,7 +22,8 @@ expressionPlaceholder =
 
 type alias Model =
     { expr : String
-    , result : Maybe AnalyzeData
+    , throw : Maybe Int
+    , data : Maybe AnalyzeData
     , error : Maybe ErrorInfo
     }
 
@@ -42,18 +43,30 @@ type alias ErrorInfo =
 
 init : Model
 init =
-    Model "" Nothing Nothing
+    Model "" Nothing Nothing Nothing
 
 
 type Msg
     = Expr String
-    | Submit
-    | Response (Result ParseError AnalyzeResponse)
+    | Throw
+    | AnalyzeResponse AnalyzeResponse
+    | ThrowResponse CalculateResponse
+    | ErrorResponse ParseError
 
 
-responseMsg : Result ParseError AnalyzeResponse -> Msg
-responseMsg res =
-    Response res
+calculateResponseMsg : CalculateResponse -> Msg
+calculateResponseMsg =
+    ThrowResponse
+
+
+analyzeResponseMsg : AnalyzeResponse -> Msg
+analyzeResponseMsg =
+    AnalyzeResponse
+
+
+errorResponseMsg : ParseError -> Msg
+errorResponseMsg =
+    ErrorResponse
 
 
 
@@ -61,13 +74,19 @@ responseMsg res =
 
 
 update : Msg -> Session -> Model -> ( Model, PageMsg, Cmd Msg )
-update msg s model =
+update msg _ model =
     case msg of
         Expr val ->
-            update Submit s { model | expr = val, error = Nothing }
+            ( { model | expr = val, throw = Nothing, error = Nothing, data = Nothing }
+            , PageMsg.None
+            , if String.isEmpty val then
+                Cmd.none
 
-        --( { model | expr = val, error = Nothing }, PageMsg.None, Cmd.none )
-        Submit ->
+              else
+                Port.analyzeDice val
+            )
+
+        Throw ->
             let
                 expr =
                     if String.isEmpty model.expr then
@@ -76,26 +95,30 @@ update msg s model =
                     else
                         model.expr
             in
-            ( { model | error = Nothing, result = Nothing }, PageMsg.None, Port.analyzeDice expr )
+            ( { model | expr = expr, throw = Nothing }
+            , PageMsg.None
+            , Cmd.batch [ Port.calculateDice expr, Port.analyzeDice expr ]
+            )
 
-        Response result ->
+        AnalyzeResponse result ->
             let
                 new_model =
-                    case result of
-                        Ok res ->
-                            { model
-                                | result =
-                                    Just
-                                        { offset = res.offset
-                                        , values = res.values
-                                        , total = Array.foldl max 0 res.values
-                                        }
-                            }
-
-                        Err error ->
-                            { model | error = Just <| errorToInfo error }
+                    { model
+                        | data =
+                            Just
+                                { offset = result.offset
+                                , values = result.values
+                                , total = Array.foldl max 0 result.values
+                                }
+                    }
             in
             ( new_model, PageMsg.None, Cmd.none )
+
+        ThrowResponse result ->
+            ( { model | throw = Just <| result.result }, PageMsg.None, Cmd.none )
+
+        ErrorResponse error ->
+            ( { model | error = Just <| errorToInfo error }, PageMsg.None, Cmd.none )
 
 
 errorToInfo : ParseError -> ErrorInfo
@@ -126,25 +149,28 @@ view model =
     column
         [ spacing 16, centerX, centerY, height (px 500), width (px 300), Background.color bgColor ]
         [ el (headingStyle [ Region.heading 1 ]) (text "Dice")
-        , Input.text (inputFieldStyle [ onEnter Submit ])
+        , Input.text (inputFieldStyle [ onEnter Throw ])
             { onChange = Expr
             , text = model.expr
             , placeholder = Just <| Input.placeholder [] <| text expressionPlaceholder
             , label = Input.labelAbove [] <| el (textStyle []) <| text "Expression:"
             }
-        , case model.error of
-            Just e ->
+        , Input.button (buttonStyle [ centerX, height (px 50), width (px 150) ]) { onPress = Just Throw, label = el [ centerX ] <| text "Throw" }
+        , case ( model.error, model.throw ) of
+            ( Just e, _ ) ->
                 row (textStyle [])
                     [ el [ Element.transparent True ] (text <| String.slice 0 e.index model.expr) -- offset
                     , text ("^ " ++ e.description) -- error
                     ]
 
-            Nothing ->
-                none
-        , Input.button (buttonStyle [ centerX, height (px 50), width (px 150) ]) { onPress = Just Submit, label = el [ centerX ] <| text "Show" }
-        , case model.result of
+            ( Nothing, Just t ) ->
+                el (textStyle []) <| text <| "Throw: " ++ String.fromInt t
+
+            ( Nothing, Nothing ) ->
+                el (textStyle []) <| text ""
+        , case model.data of
             Just res ->
-                el (textStyle [ Background.color bgColor ]) <|
+                el (textStyle []) <|
                     Element.html <|
                         Render.svg <|
                             dataToCollage res

@@ -34,7 +34,7 @@ main =
 
 init : Dimensions -> Url -> Navigation.Key -> ( Model, Cmd Msg )
 init keys url key =
-    ( gotoUrl url <| Model (Session key "") keys url <| Index <| Page.Index.init, Cmd.none )
+    ( gotoUrl url <| Model (Session key) keys url <| Index <| Page.Index.init, Cmd.none )
 
 
 type alias Model =
