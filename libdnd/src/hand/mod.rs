@@ -1,4 +1,3 @@
-use serde_derive::Serialize;
 use std::str::FromStr;
 
 mod parser;
@@ -104,10 +103,10 @@ impl Expr {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct FreqGraph {
-    offset: i64,
-    values: Vec<f64>,
+    pub offset: i64,
+    pub values: Vec<f64>,
 }
 
 impl FreqGraph {

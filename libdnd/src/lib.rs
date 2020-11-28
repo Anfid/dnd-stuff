@@ -29,7 +29,7 @@ fn calculate_dice(expr: String) -> Result<CalculateResponse, ParseError> {
 #[allow(unused)]
 fn analyze_dice(expr: String) -> Result<AnalyzeResponse, ParseError> {
     Hand::from_str(expr.as_str()).map(|h| AnalyzeResponse {
-        result: h.analyze(),
+        result: h.analyze().into(),
     })
 }
 

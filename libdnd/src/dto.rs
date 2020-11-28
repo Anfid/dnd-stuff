@@ -45,7 +45,28 @@ pub struct CalculateResponse {
 
 #[derive(Serialize)]
 pub struct AnalyzeResponse {
-    pub result: FreqGraph,
+    pub result: FreqGraphResponse,
+}
+
+#[derive(Serialize)]
+pub struct FreqGraphResponse {
+    offset: i64,
+    values: Vec<f64>,
+    max: f64,
+    total: f64,
+}
+
+impl From<FreqGraph> for FreqGraphResponse {
+    fn from(graph: FreqGraph) -> Self {
+        let max = graph.values.iter().fold(0f64, |acc, v| f64::max(acc, *v));
+        let total = graph.values.iter().sum();
+        Self {
+            offset: graph.offset,
+            values: graph.values,
+            max,
+            total,
+        }
+    }
 }
 
 #[derive(Deserialize)]
