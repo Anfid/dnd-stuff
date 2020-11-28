@@ -8,6 +8,17 @@ use dto::{AnalyzeResponse, CalculateResponse, Dice, Request, Response};
 use hand::{Hand, ParseError};
 
 #[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = self, js_name = postMessage)]
+    fn post_message(msg: String);
+}
+
+#[wasm_bindgen]
+pub fn setup() {
+    todo!()
+}
+
+#[wasm_bindgen]
 pub fn message_dispatcher(msg: &str) -> JsValue {
     console_error_panic_hook::set_once();
 

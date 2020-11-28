@@ -4,14 +4,14 @@ import Array exposing (Array)
 import Collage exposing (Collage)
 import Collage.Render as Render
 import Collage.Text as Text exposing (Text)
-import Element exposing (Element, centerX, centerY, column, el, height, none, px, row, spacing, text, width)
+import Element exposing (Element, column, el, fill, none, px, row, text)
 import Element.Background as Background
 import Element.Input as Input
 import Element.Region as Region
 import Port exposing (AnalyzeResponse, CalculateResponse, ParseError(..), Response)
 import Session exposing (Session)
 import Style exposing (bgColor, buttonStyle, headingStyle, inputFieldStyle, redColor, textStyle)
-import Util exposing (onEnter)
+import Util exposing (flip, onEnter)
 
 
 expressionPlaceholder : String
@@ -31,6 +31,7 @@ type alias AnalyzeData =
     { offset : Int
     , values : Array Float
     , total : Float
+    , max : Float
     }
 
 
@@ -103,18 +104,7 @@ update msg _ model =
             )
 
         AnalyzeResponse result ->
-            let
-                new_model =
-                    { model
-                        | data =
-                            Just
-                                { offset = result.offset
-                                , values = result.values
-                                , total = Array.foldl max 0 result.values
-                                }
-                    }
-            in
-            ( new_model, Cmd.none )
+            ( { model | data = Just result }, Cmd.none )
 
         ThrowResponse result ->
             ( { model | throw = Just <| result.result }, Cmd.none )
@@ -149,15 +139,23 @@ errorToInfo error =
 view : Model -> Element Msg
 view model =
     column
-        [ spacing 16, centerX, centerY, height (px 500), width (px 300), Background.color bgColor ]
+        [ Element.padding 20
+        , Element.spacing 16
+        , Element.centerX
+        , Element.height fill
+        , Element.width (fill |> Element.maximum 400)
+        , Background.color bgColor
+        ]
         [ el (headingStyle [ Region.heading 1 ]) (text "Dice")
-        , Input.text (inputFieldStyle [ onEnter Throw ])
+        , Input.text (inputFieldStyle [ onEnter Throw, Element.centerX ])
             { onChange = Expr
             , text = model.expr
             , placeholder = Just <| Input.placeholder [] <| text expressionPlaceholder
             , label = Input.labelAbove [] <| el (textStyle []) <| text "Expression:"
             }
-        , Input.button (buttonStyle [ centerX, height (px 50), width (px 150) ]) { onPress = Just Throw, label = el [ centerX ] <| text "Throw" }
+        , Input.button
+            (buttonStyle [ Element.centerX, Element.height <| px 50, Element.width <| px 150 ])
+            { onPress = Just Throw, label = el [ Element.centerX ] <| text "Throw" }
         , row (textStyle []) <|
             case ( model.error, model.throw ) of
                 ( Just e, _ ) ->
@@ -175,7 +173,7 @@ view model =
                 dataToCollage res
                     |> Render.svg
                     |> Element.html
-                    |> el (textStyle [])
+                    |> el [ Element.centerX, Element.width Element.shrink ]
 
             Nothing ->
                 none
@@ -184,7 +182,7 @@ view model =
 
 collageW : Float
 collageW =
-    300
+    200
 
 
 collageH : Float
@@ -202,12 +200,19 @@ dataToCollage data =
             collageW / toFloat len
 
         scaledChance v =
-            collageH * v / data.total
+            collageH * v / data.max
     in
     Collage.group
-        [ scale data.offset |> Collage.shift ( barWidth / 2, -15 )
-        , scale (data.offset + len // 2) |> Collage.shift ( collageW / 2, -15 )
-        , scale (data.offset + len - 1) |> Collage.shift ( collageW - barWidth / 2, -15 )
+        -- X scales
+        [ intScale data.offset |> Collage.shift ( barWidth / 2, -15 )
+        , intScale (data.offset + len // 2) |> Collage.shift ( collageW / 2, -15 )
+        , intScale (data.offset + len - 1) |> Collage.shift ( collageW - barWidth / 2, -15 )
+
+        -- Y scales
+        , percentScale 0 |> Collage.shift ( -15, 0 )
+        , percentScale (data.max / data.total) |> Collage.shift ( -15, collageH )
+
+        -- Graph
         , Collage.path [ ( 0, collageH + 15 ), ( 0, 0 ), ( collageW + 15, 0 ) ]
             |> Collage.traced
                 (Collage.solid 2 <| Collage.uniform <| Style.toColor Style.greenBrightColor)
@@ -228,11 +233,18 @@ dataToCollage data =
         ]
 
 
-scale : Int -> Collage msg
-scale =
+intScale : Int -> Collage msg
+intScale =
     Collage.rendered << styleScale << Text.fromString << String.fromInt
+
+
+percentScale : Float -> Collage msg
+percentScale =
+    Collage.rendered << styleScale << Text.fromString << flip (++) "%" << String.fromFloat << (*) 100
 
 
 styleScale : Text -> Text
 styleScale =
-    Text.typeface Text.Monospace >> Text.color (Style.toColor Style.fgColor) >> Text.size Text.normal
+    Text.typeface Text.Monospace
+        >> Text.color (Style.toColor Style.fgColor)
+        >> Text.size Text.normal

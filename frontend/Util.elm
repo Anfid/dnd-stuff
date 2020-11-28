@@ -1,8 +1,13 @@
-module Util exposing (onEnter)
+module Util exposing (flip, onEnter)
 
 import Element
 import Html.Events
 import Json.Decode as Decode
+
+
+flip : (a -> b -> c) -> b -> a -> c
+flip f a b =
+    f b a
 
 
 onEnter : msg -> Element.Attribute msg

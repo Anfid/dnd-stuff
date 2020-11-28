@@ -11,7 +11,7 @@ port module Port exposing
     )
 
 import Array exposing (Array)
-import Json.Decode as Decode exposing (Decoder, andThen, array, at, decodeString, fail, field, float, int, map, map2, oneOf, string)
+import Json.Decode as Decode exposing (Decoder, andThen, array, at, decodeString, fail, field, float, int, map, map2, map4, oneOf, string)
 import Json.Encode as Encode
 
 
@@ -41,6 +41,8 @@ type alias CalculateResponse =
 type alias AnalyzeResponse =
     { offset : Int
     , values : Array Float
+    , total : Float
+    , max : Float
     }
 
 
@@ -85,7 +87,11 @@ calculateDecoder =
 
 analyzeDecoder : Decoder AnalyzeResponse
 analyzeDecoder =
-    map2 AnalyzeResponse (at [ "result", "offset" ] int) (at [ "result", "values" ] (array float))
+    map4 AnalyzeResponse
+        (at [ "result", "offset" ] int)
+        (at [ "result", "values" ] (array float))
+        (at [ "result", "total" ] float)
+        (at [ "result", "max" ] float)
 
 
 parseErrorDecoder : String -> Decoder ParseError
