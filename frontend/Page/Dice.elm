@@ -1,4 +1,4 @@
-module Component.Dice exposing (Model, Msg, analyzeResponseMsg, calculateResponseMsg, errorResponseMsg, init, update, view)
+module Page.Dice exposing (Model, Msg, init, responseMsg, update, view)
 
 import Array exposing (Array)
 import Collage exposing (Collage)
@@ -8,8 +8,7 @@ import Element exposing (Element, centerX, centerY, column, el, height, none, px
 import Element.Background as Background
 import Element.Input as Input
 import Element.Region as Region
-import PageMsg exposing (PageMsg)
-import Port exposing (AnalyzeResponse, CalculateResponse, ParseError(..))
+import Port exposing (AnalyzeResponse, CalculateResponse, ParseError(..), Response)
 import Session exposing (Session)
 import Style exposing (bgColor, buttonStyle, headingStyle, inputFieldStyle, redColor, textStyle)
 import Util exposing (onEnter)
@@ -54,31 +53,35 @@ type Msg
     | ErrorResponse ParseError
 
 
-calculateResponseMsg : CalculateResponse -> Msg
-calculateResponseMsg =
-    ThrowResponse
+responseMsg : Response -> Msg
+responseMsg resp =
+    case resp of
+        Port.Calculate calculateResponse ->
+            case calculateResponse of
+                Ok res ->
+                    ThrowResponse res
 
+                Err e ->
+                    ErrorResponse e
 
-analyzeResponseMsg : AnalyzeResponse -> Msg
-analyzeResponseMsg =
-    AnalyzeResponse
+        Port.Analyze analyzeResponse ->
+            case analyzeResponse of
+                Ok res ->
+                    AnalyzeResponse res
 
-
-errorResponseMsg : ParseError -> Msg
-errorResponseMsg =
-    ErrorResponse
+                Err e ->
+                    ErrorResponse e
 
 
 
 -- UPDATE
 
 
-update : Msg -> Session -> Model -> ( Model, PageMsg, Cmd Msg )
+update : Msg -> Session -> Model -> ( Model, Cmd Msg )
 update msg _ model =
     case msg of
         Expr val ->
             ( { model | expr = val, throw = Nothing, error = Nothing, data = Nothing }
-            , PageMsg.None
             , if String.isEmpty val then
                 Cmd.none
 
@@ -96,7 +99,6 @@ update msg _ model =
                         model.expr
             in
             ( { model | expr = expr, throw = Nothing }
-            , PageMsg.None
             , Cmd.batch [ Port.calculateDice expr, Port.analyzeDice expr ]
             )
 
@@ -112,13 +114,13 @@ update msg _ model =
                                 }
                     }
             in
-            ( new_model, PageMsg.None, Cmd.none )
+            ( new_model, Cmd.none )
 
         ThrowResponse result ->
-            ( { model | throw = Just <| result.result }, PageMsg.None, Cmd.none )
+            ( { model | throw = Just <| result.result }, Cmd.none )
 
         ErrorResponse error ->
-            ( { model | error = Just <| errorToInfo error }, PageMsg.None, Cmd.none )
+            ( { model | error = Just <| errorToInfo error }, Cmd.none )
 
 
 errorToInfo : ParseError -> ErrorInfo
@@ -156,24 +158,24 @@ view model =
             , label = Input.labelAbove [] <| el (textStyle []) <| text "Expression:"
             }
         , Input.button (buttonStyle [ centerX, height (px 50), width (px 150) ]) { onPress = Just Throw, label = el [ centerX ] <| text "Throw" }
-        , case ( model.error, model.throw ) of
-            ( Just e, _ ) ->
-                row (textStyle [])
+        , row (textStyle []) <|
+            case ( model.error, model.throw ) of
+                ( Just e, _ ) ->
                     [ el [ Element.transparent True ] (text <| String.slice 0 e.index model.expr) -- offset
                     , text ("^ " ++ e.description) -- error
                     ]
 
-            ( Nothing, Just t ) ->
-                el (textStyle []) <| text <| "Throw: " ++ String.fromInt t
+                ( Nothing, Just t ) ->
+                    [ el (textStyle []) <| text <| "Throw: " ++ String.fromInt t ]
 
-            ( Nothing, Nothing ) ->
-                el (textStyle []) <| text ""
+                ( Nothing, Nothing ) ->
+                    [ el (textStyle []) <| text "" ]
         , case model.data of
             Just res ->
-                el (textStyle []) <|
-                    Element.html <|
-                        Render.svg <|
-                            dataToCollage res
+                dataToCollage res
+                    |> Render.svg
+                    |> Element.html
+                    |> el (textStyle [])
 
             Nothing ->
                 none
@@ -209,21 +211,20 @@ dataToCollage data =
         , Collage.path [ ( 0, collageH + 15 ), ( 0, 0 ), ( collageW + 15, 0 ) ]
             |> Collage.traced
                 (Collage.solid 2 <| Collage.uniform <| Style.toColor Style.greenBrightColor)
-        , Collage.filled
-            (Collage.uniform <| Style.toColor redColor)
-          <|
-            Collage.polygon <|
-                (::) ( 0, 0 ) <|
-                    List.concat <|
-                        Array.toList <|
-                            Array.push [ ( collageW, 0 ) ] <|
-                                Array.indexedMap
-                                    (\i v ->
-                                        [ ( toFloat i * barWidth, scaledChance v )
-                                        , ( toFloat (i + 1) * barWidth, scaledChance v )
-                                        ]
-                                    )
-                                    data.values
+        , data.values
+            |> Array.indexedMap
+                (\i v ->
+                    [ ( toFloat i * barWidth, scaledChance v )
+                    , ( toFloat (i + 1) * barWidth, scaledChance v )
+                    ]
+                )
+            |> Array.push [ ( collageW, 0 ) ]
+            |> Array.toList
+            |> List.concat
+            |> (::) ( 0, 0 )
+            |> Collage.polygon
+            |> Collage.filled
+                (Collage.uniform <| Style.toColor redColor)
         ]
 
 

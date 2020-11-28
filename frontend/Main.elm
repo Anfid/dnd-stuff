@@ -3,11 +3,13 @@ module Main exposing (main)
 import Browser
 import Browser.Events as Events
 import Browser.Navigation as Navigation
+import Element
+import Element.Background as Background
 import Html
-import Page.Index
-import PageMsg exposing (PageMsg)
+import Page.Dice
 import Port exposing (decodeResp, messageReceiver)
 import Session exposing (Session)
+import Style
 import Url exposing (Url)
 import Url.Parser as Parser exposing (Parser)
 
@@ -34,7 +36,7 @@ main =
 
 init : Dimensions -> Url -> Navigation.Key -> ( Model, Cmd Msg )
 init keys url key =
-    ( gotoUrl url <| Model (Session key) keys url <| Index <| Page.Index.init, Cmd.none )
+    ( gotoUrl url <| Model (Session key) keys url <| Dice <| Page.Dice.init, Cmd.none )
 
 
 type alias Model =
@@ -52,7 +54,7 @@ type alias Dimensions =
 
 
 type Page
-    = Index Page.Index.Model
+    = Dice Page.Dice.Model
 
 
 
@@ -63,7 +65,7 @@ type Msg
     = UrlChanged Url
     | LinkClicked Browser.UrlRequest
     | Resize Int Int
-    | IndexMsg Page.Index.Msg
+    | DiceMsg Page.Dice.Msg
     | Recv String
 
 
@@ -84,26 +86,22 @@ update msg model =
         ( Resize w h, _ ) ->
             ( { model | dimensions = Dimensions w h }, Cmd.none )
 
-        ( IndexMsg subMsg, Index subModel ) ->
-            Page.Index.update subMsg model.session subModel
-                |> handleUpdate Index IndexMsg model
+        ( DiceMsg subMsg, Dice subModel ) ->
+            Page.Dice.update subMsg model.session subModel
+                |> handleUpdate Dice DiceMsg model
 
-        ( Recv str, Index subModel ) ->
+        ( Recv str, Dice subModel ) ->
             case decodeResp str of
                 Ok response ->
-                    Page.Index.update (Page.Index.responseMsg response) model.session subModel
-                        |> handleUpdate Index IndexMsg model
+                    Page.Dice.update (Page.Dice.responseMsg response) model.session subModel
+                        |> handleUpdate Dice DiceMsg model
 
-                Err e ->
-                    let
-                        _ =
-                            Debug.log "Parse err" e
-                    in
+                Err _ ->
                     ( model, Cmd.none )
 
 
-handleUpdate : (subModel -> Page) -> (subMsg -> Msg) -> Model -> ( subModel, PageMsg, Cmd subMsg ) -> ( Model, Cmd Msg )
-handleUpdate toPage toMsg model ( subModel, _, subCmd ) =
+handleUpdate : (subModel -> Page) -> (subMsg -> Msg) -> Model -> ( subModel, Cmd subMsg ) -> ( Model, Cmd Msg )
+handleUpdate toPage toMsg model ( subModel, subCmd ) =
     ( { model | page = toPage subModel }
     , Cmd.map toMsg subCmd
     )
@@ -116,8 +114,15 @@ handleUpdate toPage toMsg model ( subModel, _, subCmd ) =
 view : Model -> Browser.Document Msg
 view model =
     case model.page of
-        Index subModel ->
-            { title = "Home", body = [ Html.map IndexMsg <| Page.Index.view subModel ] }
+        Dice subModel ->
+            { title = "Dice"
+            , body =
+                [ subModel
+                    |> Page.Dice.view
+                    |> Element.layout [ Background.color Style.bgColor, Element.scrollbarY, Element.height Element.fill ]
+                    |> Html.map DiceMsg
+                ]
+            }
 
 
 
@@ -139,7 +144,7 @@ gotoUrl : Url -> Model -> Model
 gotoUrl url model =
     case Parser.parse parser url of
         Just IndexRoute ->
-            { model | page = Index <| Page.Index.init, url = url }
+            { model | page = Dice <| Page.Dice.init, url = url }
 
         _ ->
             model

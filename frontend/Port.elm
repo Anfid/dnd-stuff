@@ -118,11 +118,11 @@ calculateDice : String -> Cmd msg
 calculateDice expr =
     let
         body =
-            Encode.encode 0 <|
-                Encode.object
-                    [ ( "command", Encode.string "calculate_dice" )
-                    , ( "expression", Encode.string expr )
-                    ]
+            Encode.object
+                [ ( "command", Encode.string "calculate_dice" )
+                , ( "expression", Encode.string expr )
+                ]
+                |> Encode.encode 0
     in
     sendMessage body
 
@@ -131,10 +131,10 @@ analyzeDice : String -> Cmd msg
 analyzeDice expr =
     let
         body =
-            Encode.encode 0 <|
-                Encode.object
-                    [ ( "command", Encode.string "analyze_dice" )
-                    , ( "expression", Encode.string expr )
-                    ]
+            Encode.object
+                [ ( "command", Encode.string "analyze_dice" )
+                , ( "expression", Encode.string expr )
+                ]
+                |> Encode.encode 0
     in
     sendMessage body
