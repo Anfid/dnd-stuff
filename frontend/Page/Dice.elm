@@ -208,9 +208,10 @@ dataToCollage data =
         , intScale (data.offset + len // 2) |> Collage.shift ( collageW / 2, -15 )
         , intScale (data.offset + len - 1) |> Collage.shift ( collageW - barWidth / 2, -15 )
 
-        -- Y scales
-        , percentScale 0 |> Collage.shift ( -15, 0 )
-        , percentScale (data.max / data.total) |> Collage.shift ( -15, collageH )
+        -- FIXME: Visibility and useability issues
+        -- -- Y scales
+        -- , percentScale 0 |> Collage.shift ( -15, 0 )
+        -- , percentScale (data.max / data.total) |> Collage.shift ( -15, collageH )
 
         -- Graph
         , Collage.path [ ( 0, collageH + 15 ), ( 0, 0 ), ( collageW + 15, 0 ) ]
